@@ -1,10 +1,9 @@
-const path = require('path');
-const express = require('express');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const connectDB = require('./config/db');
+const express = require("express");
+const dotenv = require("dotenv");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+const connectDB = require("./config/db");
 
 dotenv.config();
 connectDB();
@@ -12,70 +11,76 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-// Middlewares
-app.use(cors());
+// ================= MIDDLEWARE =================
 app.use(express.json());
 
-// Socket.IO setup
+// Allowed Frontend URLs
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://modern-dark-chat.vercel.app"
+];
+
+// CORS setup
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS Not Allowed"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+// ================= ROUTES =================
+app.use("/api/auth", require("./routes/authRoutes"));
+
+// Test route
+app.get("/", (req, res) => {
+  res.send("API is running successfully 🚀");
+});
+
+// ================= SOCKET.IO =================
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
-// Make io accessible in routes
-app.set('io', io);
+app.set("io", io);
 
-// Routes
-app.use('/api/auth', require('./routes/authRoutes'));
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../client/dist');
-
-  // Serve static files
-  app.use(express.static(clientBuildPath));
-
-  // ✅ FINAL FIX (no * or /*)
-  app.use((req, res) => {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
-  });
-} else {
-  // Development route
-  app.get('/', (req, res) => {
-    res.send('API is running... (Development Mode)');
-  });
-}
-
-// Socket events
-io.on('connection', (socket) => {
-  console.log(`Socket User connected: ${socket.id}`);
-  
-  socket.on('join_room', (room) => {
+  socket.on("join_room", (room) => {
     socket.join(room);
-    console.log(`User ${socket.id} joined room: ${room}`);
   });
 
-  socket.on('send_message', (data) => {
-    socket.to(data.room).emit('receive_message', data);
-  });
-  
-  socket.on('typing', (data) => {
-    socket.to(data.room).emit('typing', data);
+  socket.on("send_message", (data) => {
+    socket.to(data.room).emit("receive_message", data);
   });
 
-  socket.on('stop_typing', (data) => {
-    socket.to(data.room).emit('stop_typing', data);
+  socket.on("typing", (data) => {
+    socket.to(data.room).emit("typing", data);
   });
 
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
+  socket.on("stop_typing", (data) => {
+    socket.to(data.room).emit("stop_typing", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket disconnected:", socket.id);
   });
 });
 
-// Server start
+// ================= SERVER START =================
 const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
