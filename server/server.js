@@ -34,10 +34,11 @@ app.use('/api/auth', require('./routes/authRoutes'));
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../client/dist');
 
+  // Serve static files
   app.use(express.static(clientBuildPath));
 
-  // ✅ FIXED ROUTE (important)
-  app.get('/*', (req, res) => {
+  // ✅ FINAL FIX (no * or /*)
+  app.use((req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 } else {
